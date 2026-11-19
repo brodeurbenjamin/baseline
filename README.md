@@ -6,12 +6,15 @@ Quarterly tracker for the BASELINE workout: 4 × (1 km + 60 s rest) then 50 wall
 
 ## How it works
 ```
-Google Form ──(script commits a row)──▶ data/results.csv ──(Action)──▶ GitHub Pages dashboard
+Dashboard page (form + leaderboard + chart)
+   │ submit
+   ▼
+Google Form ──(script commits a row)──▶ data/results.csv ──(Action)──▶ GitHub Pages
 ```
-- **Google Form** – the only Google piece. Members log results with the Google account they already have.
-- **`data/results.csv`** – the data, in this repo. Every result is a commit, so you get full history. Fix a typo by editing the file on github.com.
-- **GitHub Actions + Pages** – `.github/workflows/pages.yml` republishes the dashboard whenever the CSV or site changes.
-- **Dashboard** (`site/`) – leaderboard per quarter with change vs. previous quarter, and a line chart (Total / Run / Ski / Row).
+- **One link for everyone**: the GitHub Pages site has the entry form, the leaderboard and the line chart. No accounts needed.
+- **Google Form**: works behind the scenes only. The page submits to it and its script commits each result to the repo. It's also a backup entry link.
+- **`data/results.csv`**: the data. Every result is a commit, so you get full history. Fix a typo by editing the file on github.com.
+- **GitHub Actions + Pages**: `.github/workflows/pages.yml` republishes the site whenever the CSV or site changes (about 1 minute).
 
 Names are matched case-insensitively; the latest entry per person per quarter counts. Times are stored in seconds.
 
@@ -25,9 +28,11 @@ Names are matched case-insensitively; the latest entry per person per quarter co
 **Google Form**
 3. Go to script.google.com → New project. Paste `google-form/Code.gs`.
 4. Project Settings → Script properties: `GITHUB_TOKEN` = the token, `GITHUB_REPO` = `brodeurbenjamin/baseline`.
-5. Select `setup` and click **Run**; approve the permissions. The log prints the form link.
-6. Paste the form link into `site/config.js` (`FORM_URL`) and commit to `main`.
+5. Select `setup` and click **Run**; approve the permissions. The log prints a `window.BASELINE_CONFIG = {...}` block.
+6. Replace the contents of `site/config.js` with that block and commit to `main`. (Lost it? Run `printConfig`.)
 
-Share the GitHub Pages URL (shown in Settings → Pages). Preview locally by opening `site/index.html` (demo data).
+Share the site URL (https://baseline.hybridbyben.com). Preview locally by opening `site/index.html` (demo data).
 
-**Token expired?** Submissions still land in the Form's Responses tab; create a new token, update `GITHUB_TOKEN`, and add any missed rows to the CSV.
+**Token expired?** Submissions from the page still land in the Form's Responses tab; create a new token, update `GITHUB_TOKEN`, and add any missed rows to the CSV.
+
+**Don't edit the Form's questions** (order, type or adding new ones). The page relies on them. To change them, update `setup()`, run it again, and paste the new config.

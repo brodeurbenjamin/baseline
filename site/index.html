@@ -30,7 +30,7 @@
   button { padding:11px 18px; border:0; border-radius:8px; background:var(--accent);
            color:#fff; font:inherit; font-weight:600; cursor:pointer }
   button:disabled { opacity:.6 }
-  .err{color:var(--bad)}
+  .msg { margin-top:10px; font-size:14px } .ok{color:var(--good)} .err{color:var(--bad)}
   table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums }
   th, td { padding:9px 8px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap }
   th:nth-child(-n+2), td:nth-child(-n+2) { text-align:left }
@@ -52,12 +52,20 @@
   <p class="sub">4 × (1 km + 60 s rest) then 50 wall balls — for Run, Ski and Row. Logged quarterly. Lower is faster.</p>
   <div id="demo" class="banner" hidden>Preview with demo data — results.csv is loaded once this is on GitHub Pages.</div>
 
-  <div class="card row">
-    <div>
-      <h2 style="margin:0">Did the BASELINE?</h2>
-      <p class="note" style="margin:4px 0 0">Log your Run, Ski and Row <strong>block totals, including the 50 wall balls</strong>. Results show here within a few minutes.</p>
-    </div>
-    <a id="cta" class="btn" href="#" target="_blank" rel="noopener">Log your result</a>
+  <div class="card" id="entry">
+    <h2>Log your result</h2>
+    <form id="f" novalidate>
+      <div class="grid">
+        <div><label for="name">Name</label><input id="name" required maxlength="60" autocomplete="name"></div>
+        <div><label for="date">Workout date</label><input id="date" type="date" required></div>
+        <div><label for="run">Run block total</label><input id="run" required placeholder="mm:ss" inputmode="numeric"></div>
+        <div><label for="ski">Ski block total</label><input id="ski" required placeholder="mm:ss" inputmode="numeric"></div>
+        <div><label for="row">Row block total</label><input id="row" required placeholder="mm:ss" inputmode="numeric"></div>
+      </div>
+      <p class="note"><strong>Each block total includes the 50 wall balls</strong> — the full time for 4 × 1 km, the 60 s rests and the 50 wall balls, start to finish. Use the same name every quarter so your progress lines up.</p>
+      <p><button id="go" type="submit">Submit</button></p>
+      <div id="msg" class="msg" role="status"></div>
+    </form>
   </div>
 
   <div class="card">
@@ -87,10 +95,9 @@
 <script>
 const CFG = window.BASELINE_CONFIG || {};
 const METRICS = [["total","Total"],["run","Run"],["ski","Ski"],["row","Row"]];
-let metric = "total", rows = [], chart;
+let metric = "total", rows = [], chart, showQuarter = null;
 const $ = id => document.getElementById(id);
 $("title").textContent = document.title = (CFG.GYM_NAME || "BASELINE") + " Tracker";
-if (CFG.FORM_URL) $("cta").href = CFG.FORM_URL; else $("cta").hidden = true;
 
 // ---------- time helpers ----------
 function fmt(sec) {
@@ -99,6 +106,14 @@ function fmt(sec) {
   const pad = n => String(n).padStart(2, "0");
   return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
+
+function parseTime(s) {          // "24:35" or "1:02:10" -> seconds
+  const parts = String(s).trim().split(":");
+  if (parts.length < 2 || parts.length > 3 || !/^\d{1,2}$/.test(parts[0])) return NaN;
+  if (parts.slice(1).some(p => !/^[0-5]\d$/.test(p))) return NaN;
+  return parts.map(Number).reduce((a, p) => a * 60 + p, 0);
+}
+const quarterOf = d => { const [y, m] = d.split("-").map(Number); return `${y} Q${Math.ceil(m / 3)}`; };
 
 // ---------- data ----------
 function demoData() {
@@ -200,7 +215,7 @@ function renderChart(M) {
 }
 function render() {
   const M = model(rows);
-  const sel = $("q"), keep = sel.value;
+  const sel = $("q"), keep = showQuarter || sel.value; showQuarter = null;
   sel.innerHTML = [...M.quarters].reverse().map(q => `<option>${q}</option>`).join("");
   if (M.quarters.includes(keep)) sel.value = keep;
   renderBoard(M);
@@ -215,7 +230,42 @@ $("metric").onclick = e => {
   try { renderChart(model(rows)); } catch (e) { console.error(e); }
 };
 
-load().then(r => { rows = r; render(); })
+// ---------- form (posts to the Google Form, which commits to data/results.csv) ----------
+const LIVE_FORM = !!(CFG.FORM_ACTION && CFG.ENTRY);
+$("date").value = new Date().toLocaleDateString("en-CA");      // yyyy-mm-dd, local time
+try { $("name").value = localStorage.getItem("baseline_name") || ""; } catch (e) {}
+$("f").onsubmit = async e => {
+  e.preventDefault();
+  const msg = $("msg"), say = (cls, t) => { msg.className = "msg " + cls; msg.textContent = t; };
+  const name = $("name").value.trim().replace(/\s+/g, " "), date = $("date").value;
+  const t = { run: $("run").value.trim(), ski: $("ski").value.trim(), row: $("row").value.trim() };
+  const sec = Object.fromEntries(Object.entries(t).map(([k, v]) => [k, parseTime(v)]));
+  if (!name) return say("err", "Enter your name.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return say("err", "Pick the workout date.");
+  for (const k of ["run", "ski", "row"])
+    if (!(sec[k] >= 60 && sec[k] <= 21600)) return say("err", `Enter your ${k} block total like 24:35 (mm:ss).`);
+
+  const entry = { ts: new Date().toISOString(), date, quarter: quarterOf(date), name,
+                  run: sec.run, ski: sec.ski, row: sec.row, total: sec.run + sec.ski + sec.row };
+  if (!LIVE_FORM) { rows.push(entry); showQuarter = entry.quarter; render(); return say("ok", "Added (preview only — not saved)."); }
+
+  $("go").disabled = true; say("", "Submitting…");
+  try {
+    const E = CFG.ENTRY;
+    // Google Forms doesn't send CORS headers, so the response is opaque; a network error still throws.
+    await fetch(CFG.FORM_ACTION, { method: "POST", mode: "no-cors", body: new URLSearchParams({
+      [E.name]: name, [E.date]: date, [E.run]: t.run, [E.ski]: t.ski, [E.row]: t.row }) });
+    try { localStorage.setItem("baseline_name", name); } catch (e) {}
+    rows.push(entry); showQuarter = entry.quarter; render();
+    ["run", "ski", "row"].forEach(id => $(id).value = "");
+    say("ok", `Thanks ${name}! You're on the board — it'll be saved permanently within a few minutes.`);
+  } catch (err) {
+    say("err", "Couldn't submit — check your connection and try again.");
+  }
+  $("go").disabled = false;
+};
+
+load().then(r => { rows = r; if (!LIVE_FORM && $("demo").hidden) $("entry").hidden = true; render(); })
   .catch(err => { $("lb").innerHTML = `<tr><td colspan="6" class="err">${esc(String(err.message))}</td></tr>`; });
 </script>
 </body>

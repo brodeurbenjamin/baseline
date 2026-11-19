@@ -11,8 +11,10 @@
  */
 const CSV_PATH = 'data/results.csv';
 
-/** Run once from the editor: creates the form and the submit trigger. */
+/** Run once from the editor: creates the form, the submit trigger, and prints site config. */
 function setup() {
+  ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));   // safe to re-run
+
   const form = FormApp.create('BASELINE — log your result');
   form.setDescription(
     '4 × (1 km + 60 s rest) then 50 wall balls — for Run, Ski and Row.\n' +
@@ -20,20 +22,43 @@ function setup() {
   form.setConfirmationMessage('Thanks! Your result will appear on the dashboard within a few minutes.');
   form.setCollectEmail(false);
 
-  form.addTextItem().setTitle('Name').setHelpText('Use the same name every quarter so your progress lines up.')
-      .setRequired(true);
-  form.addDateItem().setTitle('Workout date').setRequired(true);
+  // Plain text questions so the dashboard page can submit to this form directly.
+  const time = FormApp.createTextValidation()
+    .requireTextMatchesPattern('^\\d{1,2}(:[0-5]\\d){1,2}$')
+    .setHelpText('Use mm:ss, e.g. 24:35').build();
+  form.addTextItem().setTitle('Name').setRequired(true)
+      .setHelpText('Use the same name every quarter so your progress lines up.');
+  form.addTextItem().setTitle('Workout date').setRequired(true).setHelpText('YYYY-MM-DD')
+      .setValidation(FormApp.createTextValidation()
+        .requireTextMatchesPattern('^\\d{4}-\\d{2}-\\d{2}$').setHelpText('YYYY-MM-DD').build());
   ['Run', 'Ski', 'Row'].forEach(b =>
-    form.addDurationItem().setTitle(b + ' block total (incl. wall balls)')
-        .setHelpText('4 × 1 km + rests + 50 wall balls, start to finish.').setRequired(true));
+    form.addTextItem().setTitle(b + ' block total (incl. wall balls)').setRequired(true)
+        .setHelpText('4 × 1 km + rests + 50 wall balls, start to finish (mm:ss).').setValidation(time));
 
   ScriptApp.newTrigger('onSubmit').forForm(form).onFormSubmit().create();
-  Logger.log('Share this link (also paste into site/config.js): ' + form.getPublishedUrl());
-  Logger.log('Edit the form here: ' + form.getEditUrl());
+  PropertiesService.getScriptProperties().setProperty('FORM_ID', form.getId());
+  printConfig();
 }
 
-function toSeconds_(hms) {               // "hh:mm:ss" from a duration item
-  return String(hms).split(':').map(Number).reduce((a, p) => a * 60 + p, 0);
+/** Prints the block to paste into site/config.js. */
+function printConfig() {
+  const form = FormApp.openById(PropertiesService.getScriptProperties().getProperty('FORM_ID'));
+  const items = form.getItems();
+  let resp = form.createResponse();
+  items.forEach((it, i) => resp = resp.withItemResponse(it.asTextItem().createResponse('x' + i)));
+  const ids = {};
+  resp.toPrefilledUrl().replace(/entry\.(\d+)=x(\d)/g, (_, id, i) => { ids[i] = 'entry.' + id; });
+  const cfg = {
+    GYM_NAME: 'BASELINE',
+    FORM_ACTION: form.getPublishedUrl().replace(/\/viewform.*$/, '/formResponse'),
+    ENTRY: { name: ids[0], date: ids[1], run: ids[2], ski: ids[3], row: ids[4] },
+  };
+  Logger.log('Paste this into site/config.js:\n\nwindow.BASELINE_CONFIG = ' + JSON.stringify(cfg, null, 2) + ';');
+  Logger.log('Form (backup link / edit): ' + form.getPublishedUrl() + '  |  ' + form.getEditUrl());
+}
+
+function toSeconds_(t) {                 // "mm:ss" or "h:mm:ss"
+  return String(t).trim().split(':').map(Number).reduce((a, p) => a * 60 + p, 0);
 }
 function cleanName_(s) {                  // safe for CSV and spreadsheets
   return String(s).replace(/[",\r\n]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -41,7 +66,7 @@ function cleanName_(s) {                  // safe for CSV and spreadsheets
 }
 
 function onSubmit(e) {
-  const answers = e.response.getItemResponses().map(r => r.getResponse());
+  const answers = e.response.getItemResponses().map(r => String(r.getResponse()).trim());
   const [name, date, run, ski, row] =
     [cleanName_(answers[0]), String(answers[1]), ...answers.slice(2, 5).map(toSeconds_)];
   if (!name || !/^\d{4}-\d{2}-\d{2}$/.test(date) || [run, ski, row].some(t => !(t >= 60 && t <= 21600))) {
