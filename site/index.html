@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BASELINE Tracker</title>
+<title>Hybrid_by_Ben BASELINE Tracking</title>
 <style>
   :root {
     --bg:#f6f7f9; --card:#fff; --text:#16181d; --muted:#6a7280; --line:#e3e6eb;
@@ -53,8 +53,9 @@
 </head>
 <body>
 <div class="wrap">
-  <h1 id="title">BASELINE Tracker</h1>
-  <p class="sub">4 × (1 km + 60 s rest) then 50 wall balls — for Run, Ski and Row. Logged quarterly. Lower is faster.</p>
+  <h1 id="title">Hybrid_by_Ben BASELINE Tracking</h1>
+  <p class="sub" style="margin-bottom:6px">4 × (1 km + 60 s rest) + 50 wall balls — repeated for Run, Ski and Row. Logged quarterly. Cap the workout at 90 minutes.</p>
+  <p class="sub"><strong>No egos here.</strong> This is to showcase sustained improvements.</p>
   <div id="demo" class="banner" hidden>Preview with demo data — results.csv is loaded once this is on GitHub Pages.</div>
 
   <div class="card" id="entry">
@@ -102,7 +103,6 @@ const CFG = window.BASELINE_CONFIG || {};
 const METRICS = [["total","Total"],["run","Run"],["ski","Ski"],["row","Row"]];
 let metric = "total", rows = [], chart, showQuarter = null;
 const $ = id => document.getElementById(id);
-$("title").textContent = document.title = (CFG.GYM_NAME || "BASELINE") + " Tracker";
 
 // ---------- time helpers ----------
 function fmt(sec) {
