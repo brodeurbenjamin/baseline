@@ -238,7 +238,7 @@ $("metric").onclick = e => {
 // ---------- form (posts to the Google Form, which commits to data/results.csv) ----------
 const LIVE_FORM = !!(CFG.FORM_ACTION && CFG.ENTRY);
 $("date").value = new Date().toLocaleDateString("en-CA");      // yyyy-mm-dd, local time
-try { $("name").value = localStorage.getItem("baseline_name") || ""; } catch (e) {}
+try { localStorage.removeItem("baseline_name"); } catch (e) {}   // clear the old remembered name
 $("f").onsubmit = async e => {
   e.preventDefault();
   const msg = $("msg"), say = (cls, t) => { msg.className = "msg " + cls; msg.textContent = t; };
@@ -260,7 +260,6 @@ $("f").onsubmit = async e => {
     // Google Forms doesn't send CORS headers, so the response is opaque; a network error still throws.
     await fetch(CFG.FORM_ACTION, { method: "POST", mode: "no-cors", body: new URLSearchParams({
       [E.name]: name, [E.date]: date, [E.run]: t.run, [E.ski]: t.ski, [E.row]: t.row }) });
-    try { localStorage.setItem("baseline_name", name); } catch (e) {}
     rows.push(entry); showQuarter = entry.quarter; render();
     ["run", "ski", "row"].forEach(id => $(id).value = "");
     say("ok", `Thanks ${name}! You're on the board — it'll be saved permanently within a few minutes.`);
