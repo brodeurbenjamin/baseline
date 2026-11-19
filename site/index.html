@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BASELINE Tracker</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#fff; --text:#16181d; --muted:#6a7280; --line:#e3e6eb;
+    --accent:#e4572e; --good:#14804a; --bad:#c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0e1116; --card:#171b22; --text:#eef0f3; --muted:#8e97a6; --line:#262c36;
+            --accent:#ff7a50; --good:#4cc38a; --bad:#ff6b5e; }
+  }
+  * { box-sizing:border-box } [hidden] { display:none !important }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif }
+  .wrap { max-width:1000px; margin:0 auto; padding:20px 16px 60px }
+  h1 { font-size:24px; margin:0 0 2px } h2 { font-size:16px; margin:0 0 12px }
+  .sub { color:var(--muted); margin:0 0 20px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:16px; margin-bottom:16px }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:space-between }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px }
+  input, select { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px;
+                  background:var(--bg); color:var(--text); font:inherit }
+  .grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)) }
+  .btn { display:inline-block; padding:11px 18px; border-radius:8px; background:var(--accent); color:#fff; font-weight:600; text-decoration:none }
+  button { padding:11px 18px; border:0; border-radius:8px; background:var(--accent);
+           color:#fff; font:inherit; font-weight:600; cursor:pointer }
+  button:disabled { opacity:.6 }
+  .err{color:var(--bad)}
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums }
+  th, td { padding:9px 8px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap }
+  th:nth-child(-n+2), td:nth-child(-n+2) { text-align:left }
+  th { font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.03em }
+  .scroll { overflow-x:auto }
+  .d { font-size:12px; display:block } .good{color:var(--good)} .bad{color:var(--bad)} .muted{color:var(--muted)}
+  .chartbox { position:relative; height:360px }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap }
+  .tabs button { background:var(--bg); color:var(--text); border:1px solid var(--line); padding:6px 12px; font-weight:500 }
+  .tabs button.on { background:var(--accent); color:#fff; border-color:var(--accent) }
+  .banner { background:#fff3cd; color:#5c4400; border-radius:8px; padding:8px 12px; margin-bottom:16px; font-size:14px }
+  .note { color:var(--muted); font-size:13px; margin:8px 0 0 }
+  select.q { width:auto }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">BASELINE Tracker</h1>
+  <p class="sub">4 × (1 km + 60 s rest) then 50 wall balls — for Run, Ski and Row. Logged quarterly. Lower is faster.</p>
+  <div id="demo" class="banner" hidden>Preview with demo data — results.csv is loaded once this is on GitHub Pages.</div>
+
+  <div class="card row">
+    <div>
+      <h2 style="margin:0">Did the BASELINE?</h2>
+      <p class="note" style="margin:4px 0 0">Log your Run, Ski and Row <strong>block totals, including the 50 wall balls</strong>. Results show here within a few minutes.</p>
+    </div>
+    <a id="cta" class="btn" href="#" target="_blank" rel="noopener">Log your result</a>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <h2 id="lbTitle">Leaderboard</h2>
+      <select id="q" class="q" aria-label="Quarter"></select>
+    </div>
+    <div class="scroll"><table>
+      <thead><tr><th>#</th><th>Athlete</th><th>Total</th><th>Run</th><th>Ski</th><th>Row</th></tr></thead>
+      <tbody id="lb"></tbody>
+    </table></div>
+    <p class="note">Small figures show change vs. that athlete's previous quarter (green = faster).</p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <h2>Progress over time</h2>
+      <div class="tabs" id="metric"></div>
+    </div>
+    <div class="chartbox"><canvas id="chart"></canvas></div>
+    <p class="note">Tap a name in the legend to hide/show an athlete.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="config.js"></script>
+<script>
+const CFG = window.BASELINE_CONFIG || {};
+const METRICS = [["total","Total"],["run","Run"],["ski","Ski"],["row","Row"]];
+let metric = "total", rows = [], chart;
+const $ = id => document.getElementById(id);
+$("title").textContent = document.title = (CFG.GYM_NAME || "BASELINE") + " Tracker";
+if (CFG.FORM_URL) $("cta").href = CFG.FORM_URL; else $("cta").hidden = true;
+
+// ---------- time helpers ----------
+function fmt(sec) {
+  sec = Math.round(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  const pad = n => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+// ---------- data ----------
+function demoData() {
+  const people = { "Alex":[3300,1500,1700], "Sam":[3600,1650,1800], "Jordan":[3000,1400,1600],
+                   "Riley":[3900,1800,1900], "Casey":[3450,1550,1750] };
+  const qs = [["2025-12-10","2025 Q4"],["2026-03-11","2026 Q1"],["2026-06-10","2026 Q2"],["2026-09-09","2026 Q3"]];
+  const out = [];
+  Object.entries(people).forEach(([name, base], pi) => qs.forEach(([date, quarter], qi) => {
+    if (name === "Riley" && qi === 0) return;
+    const f = 1 - qi * 0.025 + ((pi * 7 + qi * 3) % 5 - 2) * 0.006;
+    const [run, ski, row] = base.map(t => Math.round(t * f * 0.45));
+    out.push({ ts: date + "T08:00:00Z", date, quarter, name, run, ski, row, total: run + ski + row });
+  }));
+  return out;
+}
+// CSV columns: submitted,workout_date,quarter,name,run_s,ski_s,row_s,total_s
+function parseCsv(text) {
+  return text.trim().split(/\r?\n/).slice(1).filter(Boolean).map(l => {
+    const [ts, date, quarter, name, run, ski, row] = l.split(",");
+    const r = { ts, date, quarter, name, run: +run, ski: +ski, row: +row };
+    r.total = r.run + r.ski + r.row;       // recompute so hand edits stay consistent
+    return r;
+  }).filter(r => r.name && r.quarter && isFinite(r.total));
+}
+async function load() {
+  try {
+    const res = await fetch("results.csv?t=" + Date.now());
+    if (!res.ok) throw new Error(res.status);
+    return parseCsv(await res.text());
+  } catch (e) {                            // opened locally: show demo data
+    $("demo").hidden = false; return demoData();
+  }
+}
+
+// Collapse to one entry per athlete per quarter (latest submission wins).
+function model(rows) {
+  const by = new Map(), names = new Map();
+  [...rows].sort((a, b) => a.ts.localeCompare(b.ts)).forEach(r => {
+    const key = r.name.trim().toLowerCase();
+    names.set(key, r.name.trim());
+    if (!by.has(key)) by.set(key, new Map());
+    by.get(key).set(r.quarter, r);
+  });
+  const quarters = [...new Set(rows.map(r => r.quarter))].sort();
+  return { by, names, quarters };
+}
+
+// ---------- render ----------
+function delta(cur, prev) {
+  if (prev == null) return `<span class="d muted">new</span>`;
+  const d = cur - prev;
+  if (Math.abs(d) < 1) return `<span class="d muted">±0</span>`;
+  return `<span class="d ${d < 0 ? "good" : "bad"}">${d < 0 ? "▼" : "▲"} ${fmt(Math.abs(d))}</span>`;
+}
+function renderBoard(M) {
+  const q = $("q").value;
+  $("lbTitle").textContent = `Leaderboard — ${q}`;
+  const list = [];
+  M.by.forEach((qmap, key) => {
+    const cur = qmap.get(q); if (!cur) return;
+    const prevQ = M.quarters.filter(x => x < q && qmap.has(x)).pop();
+    list.push({ name: M.names.get(key), cur, prev: prevQ ? qmap.get(prevQ) : null });
+  });
+  list.sort((a, b) => a.cur.total - b.cur.total);
+  $("lb").innerHTML = list.map((e, i) => `<tr><td>${i + 1}</td><td>${esc(e.name)}</td>` +
+    ["total","run","ski","row"].map(k =>
+      `<td><strong>${fmt(e.cur[k])}</strong>${delta(e.cur[k], e.prev && e.prev[k])}</td>`).join("") +
+    `</tr>`).join("") || `<tr><td colspan="6" class="muted">No results yet.</td></tr>`;
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const PALETTE = ["#e4572e","#2e86de","#1fa37a","#f2a900","#8e44ad","#d6336c","#16a5b8","#7d8b99","#9c6b30","#5c7cfa"];
+function renderChart(M) {
+  const css = getComputedStyle(document.documentElement);
+  const muted = css.getPropertyValue("--muted").trim(), grid = css.getPropertyValue("--line").trim();
+  const datasets = [...M.by.entries()].map(([key, qmap], i) => ({
+    label: M.names.get(key),
+    data: M.quarters.map(q => qmap.has(q) ? qmap.get(q)[metric] : null),
+    borderColor: PALETTE[i % PALETTE.length], backgroundColor: PALETTE[i % PALETTE.length],
+    tension: .25, spanGaps: true, pointRadius: 4, borderWidth: 2,
+  }));
+  if (chart) chart.destroy();
+  chart = new Chart($("chart"), {
+    type: "line",
+    data: { labels: M.quarters, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "nearest", intersect: false },
+      scales: {
+        y: { ticks: { color: muted, callback: v => fmt(v) }, grid: { color: grid },
+             title: { display: true, text: "Time (lower is faster)", color: muted } },
+        x: { ticks: { color: muted }, grid: { color: grid } },
+      },
+      plugins: {
+        legend: { labels: { color: muted, usePointStyle: true } },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.parsed.y)}` } },
+      },
+    },
+  });
+}
+function render() {
+  const M = model(rows);
+  const sel = $("q"), keep = sel.value;
+  sel.innerHTML = [...M.quarters].reverse().map(q => `<option>${q}</option>`).join("");
+  if (M.quarters.includes(keep)) sel.value = keep;
+  renderBoard(M);
+  try { renderChart(M); } catch (e) { console.error(e); }
+  sel.onchange = () => renderBoard(M);
+}
+$("metric").innerHTML = METRICS.map(([k, l]) => `<button type="button" data-k="${k}" class="${k === metric ? "on" : ""}">${l}</button>`).join("");
+$("metric").onclick = e => {
+  const k = e.target.dataset.k; if (!k) return;
+  metric = k;
+  [...$("metric").children].forEach(b => b.classList.toggle("on", b.dataset.k === k));
+  try { renderChart(model(rows)); } catch (e) { console.error(e); }
+};
+
+load().then(r => { rows = r; render(); })
+  .catch(err => { $("lb").innerHTML = `<tr><td colspan="6" class="err">${esc(String(err.message))}</td></tr>`; });
+</script>
+</body>
+</html>
