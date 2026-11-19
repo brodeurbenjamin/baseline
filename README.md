@@ -36,3 +36,6 @@ Share the site URL (https://baseline.hybridbyben.com). Preview locally by openin
 **Token expired?** Submissions from the page still land in the Form's Responses tab; create a new token, update `GITHUB_TOKEN`, and add any missed rows to the CSV.
 
 **Don't edit the Form's questions** (order, type or adding new ones). The page relies on them. To change them, update `setup()`, run it again, and paste the new config.
+
+## Copyright
+© 2026 Hybrid_by_Ben. All rights reserved. See [LICENSE](LICENSE). The code is visible, but not licensed for reuse.

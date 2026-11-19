@@ -1,4 +1,6 @@
 /**
+ * © 2026 Hybrid_by_Ben. All rights reserved. See LICENSE.
+ *
  * BASELINE tracker — Google Form side.
  * The only Google piece: it builds the entry form and, on each submission,
  * commits a row to data/results.csv in GitHub. Everything else
