@@ -31,7 +31,7 @@ Names are matched case-insensitively; the latest entry per person per quarter co
 5. Select `setup` and click **Run**; approve the permissions. The log prints a `window.BASELINE_CONFIG = {...}` block.
 6. Replace the contents of `site/config.js` with that block and commit to `main`. (Lost it? Run `printConfig`.)
 
-Share the site URL (https://baseline.hybridbyben.com). Preview locally by opening `site/index.html` (demo data).
+Share the site URL (https://hybridbyben.com/baseline/). The old address, baseline.hybridbyben.com, redirects there (brodeurbenjamin/baseline-redirect). Preview locally by opening `site/index.html` (demo data).
 
 **Token expired?** Submissions from the page still land in the Form's Responses tab; create a new token, update `GITHUB_TOKEN`, and add any missed rows to the CSV.
 
