@@ -11,17 +11,24 @@ permissions:
 concurrency:
   group: pages
   cancel-in-progress: true   # latest commit already contains every result
+# Two jobs, as in GitHub's own Pages examples: deploying in the same job that
+# uploaded sometimes found no files yet (24 Nov 2026: "No artifacts named
+# github-pages were found" while the upload had succeeded a second earlier).
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.d.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
       - run: mkdir _site && cp site/* data/results.csv _site/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.d.outputs.page_url }}
+    steps:
       - id: d
         uses: actions/deploy-pages@v4
