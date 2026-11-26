@@ -69,9 +69,9 @@
       <div class="grid">
         <div><label for="name">Name</label><input id="name" required maxlength="60" autocomplete="name"></div>
         <div><label for="date">Workout date</label><input id="date" type="date" required></div>
-        <div><label for="run">Run block total</label><input id="run" required placeholder="mm:ss" inputmode="numeric"></div>
-        <div><label for="ski">Ski block total</label><input id="ski" required placeholder="mm:ss" inputmode="numeric"></div>
-        <div><label for="row">Row block total</label><input id="row" required placeholder="mm:ss" inputmode="numeric"></div>
+        <div><label for="run">Run block total</label><input id="run" class="time" required placeholder="e.g. 2435" inputmode="numeric" maxlength="5" autocomplete="off"></div>
+        <div><label for="ski">Ski block total</label><input id="ski" class="time" required placeholder="e.g. 2435" inputmode="numeric" maxlength="5" autocomplete="off"></div>
+        <div><label for="row">Row block total</label><input id="row" class="time" required placeholder="e.g. 2435" inputmode="numeric" maxlength="5" autocomplete="off"></div>
       </div>
       <p class="note"><strong>Each block total includes the 50 wall balls</strong> — the full time for 4 × 1 km, the 60 s rests and the 50 wall balls, start to finish. Use the same name every quarter so your progress lines up.</p>
       <p><button id="go" type="submit">Submit</button></p>
@@ -127,6 +127,13 @@ function parseTime(s) {          // "24:35" or "1:02:10" -> seconds
   if (parts.slice(1).some(p => !/^[0-5]\d$/.test(p))) return NaN;
   return parts.map(Number).reduce((a, p) => a * 60 + p, 0);
 }
+// Time boxes: type digits only and the colon goes in by itself, so a phone's
+// number pad works ("2435" -> "24:35", "935" -> "9:35"). Pasting "24:35" works too.
+function autoColon(v) {
+  const d = String(v).replace(/\D/g, "").slice(0, 4);
+  return d.length > 2 ? `${d.slice(0, -2)}:${d.slice(-2)}` : d;
+}
+document.querySelectorAll("input.time").forEach(el => el.addEventListener("input", () => { el.value = autoColon(el.value); }));
 const quarterOf = d => { const [y, m] = d.split("-").map(Number); return `${y} Q${Math.ceil(m / 3)}`; };
 
 // ---------- data ----------
@@ -257,7 +264,7 @@ $("f").onsubmit = async e => {
   if (!name) return say("err", "Enter your name.");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return say("err", "Pick the workout date.");
   for (const k of ["run", "ski", "row"])
-    if (!(sec[k] >= 60 && sec[k] <= 21600)) return say("err", `Enter your ${k} block total like 24:35 (mm:ss).`);
+    if (!(sec[k] >= 60 && sec[k] <= 21600)) return say("err", `Check your ${k} block total: type 3 or 4 digits, e.g. 2435 for 24:35 (seconds go up to 59).`);
 
   const entry = { ts: new Date().toISOString(), date, quarter: quarterOf(date), name,
                   run: sec.run, ski: sec.ski, row: sec.row, total: sec.run + sec.ski + sec.row };
